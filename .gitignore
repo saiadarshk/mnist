@@ -1,0 +1,14 @@
+# watch out for those pesky .DS_Store & binary files
+data
+python/data
+python/venv
+.vscode
+.venv
+.gitignore
+mnist_data
+dev
+excalidraw.log
+FINALREPORT.md
+uv.lock
+CLAUDE.md
+pyproject.toml
