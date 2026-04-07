@@ -310,6 +310,28 @@ float cross_entropy_loss(float *output, int *labels, int batch_size) {
     return total_loss / batch_size;
 }
 
+float compute_accuracy(float *output, int *labels, int batch_size) {
+    int correct = 0;
+
+    for (int b = 0; b < batch_size; b++) {
+        int pred = 0;
+        float max_val = output[b * OUTPUT_SIZE];
+
+        for (int i = 1; i < OUTPUT_SIZE; i++) {
+            if (output[b * OUTPUT_SIZE + i] > max_val) {
+                max_val = output[b * OUTPUT_SIZE + i];
+                pred = i;
+            }
+        }
+
+        if (pred == labels[b]) {
+            correct++;
+        }
+    }
+
+    return (float)correct / batch_size;
+}
+
 // Backward pass function with timing (GPU version of v3.c)
 void backward_timed(NeuralNetwork *nn, float *input, float *hidden, float *output, int *labels, int batch_size, TimingStats *stats) {
     struct timespec start, end;
@@ -422,6 +444,8 @@ void train_timed(NeuralNetwork *nn, float *X_train, int *y_train) {
 
     for (int epoch = 0; epoch < EPOCHS; epoch++) {
         float total_loss = 0.0f;
+        float total_accuracy = 0.0f;
+
         
         for (int batch = 0; batch < num_batches; batch++) {
             int start_idx = batch * BATCH_SIZE;
@@ -447,6 +471,8 @@ void train_timed(NeuralNetwork *nn, float *X_train, int *y_train) {
             clock_gettime(CLOCK_MONOTONIC, &step_start);
             float loss = cross_entropy_loss(h_output, batch_labels, BATCH_SIZE);
             total_loss += loss;
+            float acc = compute_accuracy(h_output, batch_labels, BATCH_SIZE);
+            total_accuracy += acc;
             clock_gettime(CLOCK_MONOTONIC, &step_end);
             stats.cross_entropy += get_time_diff(step_start, step_end);
 
@@ -457,7 +483,7 @@ void train_timed(NeuralNetwork *nn, float *X_train, int *y_train) {
             update_weights_timed(nn, &stats);
         }
         
-        printf("Epoch %d loss: %.4f\n", epoch, total_loss / num_batches);
+        printf("Epoch %d loss: %.4f, accuracy: %.2f%%\n",epoch,total_loss / num_batches,(total_accuracy / num_batches) * 100);
     }
     
     // End total timing
