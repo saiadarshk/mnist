@@ -156,9 +156,7 @@ Measured on RTX 3090 (Ampere architecture):
 | v3.c    | C CPU          | 90.6s | 1x (baseline) | 0.142 |
 | v4.cu   | Naive CUDA     | 0.9s | 100x | 0.142 |
 | v5.cu   | cuBLAS         | 0.4s | 225x | 0.142 |
-| v6.cu   | TF32 Optimized | 0.3s | 300x | 0.142 |
-| v7.cu   | Fused GEMM     | 0.6s | 150x | 0.143 |
-| v8.cu   | Pure FP16      | **0.3s** | **300x** | 0.145 |
+
 
 ### Timing Breakdown Analysis
 
@@ -175,20 +173,7 @@ Each implementation provides detailed timing breakdowns:
 - Memory transfers (H2D + D2H): ~30% of time
 - Host computation (loss calculation): ~10% of time
 
-**v6 (Fully Optimized)**: Maximum GPU utilization
-- GPU compute: ~95% of time (loss computation moved to GPU)
-- Memory transfers: ~4% of time (overlapped with compute via streams)
-- Overhead: ~1% of time
 
-**v7 (Custom Fused GEMM)**: Educational implementation
-- GPU compute: ~97% of time (custom tiled GEMM slower than cuBLAS)
-- Memory transfers: ~1% of time
-- Shows the performance gap between naive and optimized GEMM implementations
-
-**v8 (Pure FP16)**: Maximum performance implementation
-- GPU compute: ~95% of time (native FP16 Tensor Cores)
-- Memory transfers: ~3% of time (half the bandwidth of FP32)
-- Fastest version due to native half-precision throughout
 
 ## Performance Insights
 
