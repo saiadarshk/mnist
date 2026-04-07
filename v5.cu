@@ -309,6 +309,26 @@ float compute_loss_on_gpu(NeuralNetworkCUDA *nn, int batch_size) {
     return total_loss / batch_size;
 }
 
+float compute_accuracy_cpu(float *logits, int *labels, int batch_size) {
+    int correct = 0;
+
+    for (int b = 0; b < batch_size; b++) {
+        int pred = 0;
+        float max_val = logits[b * OUTPUT_SIZE];
+
+        for (int i = 1; i < OUTPUT_SIZE; i++) {
+            if (logits[b * OUTPUT_SIZE + i] > max_val) {
+                max_val = logits[b * OUTPUT_SIZE + i];
+                pred = i;
+            }
+        }
+
+        if (pred == labels[b]) correct++;
+    }
+
+    return (float)correct / batch_size;
+}
+
 void initialize_random_weights_cuda(NeuralNetworkCUDA *nn) {
     float *h_weights1 = (float *)malloc(INPUT_SIZE * HIDDEN_SIZE * sizeof(float));
     initialize_weights_host(h_weights1, INPUT_SIZE, HIDDEN_SIZE);
@@ -378,6 +398,7 @@ void free_nn_cuda(NeuralNetworkCUDA *nn) {
 }
 
 int main() {
+    cudaSetDevice(0);
     srand(12345); // Fixed seed for debugging
 
     float *train_data = (float *)malloc(TRAIN_SIZE * INPUT_SIZE * sizeof(float));
@@ -390,6 +411,8 @@ int main() {
     initialize_nn_cuda(&nn);
 
     int num_batches = TRAIN_SIZE / BATCH_SIZE;
+
+    float *h_logits = (float *)malloc(BATCH_SIZE * OUTPUT_SIZE * sizeof(float));
     
     // Initialize CORRECTED timing stats
     TimingStats stats = {0};
@@ -399,6 +422,7 @@ int main() {
 
     for (int epoch = 0; epoch < EPOCHS; epoch++) {
         float total_loss = 0.0f;
+        float total_accuracy = 0.0f;
         for (int batch = 0; batch < num_batches; batch++) {
             float *batch_input = train_data + batch * BATCH_SIZE * INPUT_SIZE;
             int *batch_labels = train_labels + batch * BATCH_SIZE;
@@ -415,6 +439,10 @@ int main() {
 
             // Forward pass
             forward_pass_only(&nn, BATCH_SIZE);
+            CUDA_CHECK(cudaMemcpy(h_logits, nn.d_fc2_output,BATCH_SIZE * OUTPUT_SIZE * sizeof(float),cudaMemcpyDeviceToHost));
+
+            float acc = compute_accuracy_cpu(h_logits, batch_labels, BATCH_SIZE);
+            total_accuracy += acc;
 
             // Loss + backward gradient (GPU-side softmax + cross-entropy)
             float batch_loss = compute_loss_on_gpu(&nn, BATCH_SIZE);
@@ -429,7 +457,7 @@ int main() {
             clock_gettime(CLOCK_MONOTONIC, &step_end);
             stats.gpu_compute += get_time_diff(step_start, step_end);
         }
-        printf("Epoch %d loss: %.4f\n", epoch, total_loss / num_batches);
+        printf("Epoch %d loss: %.4f, accuracy: %.2f%%\n",epoch,total_loss / num_batches,(total_accuracy / num_batches) * 100);
     }
 
     clock_gettime(CLOCK_MONOTONIC, &end);
@@ -445,6 +473,7 @@ int main() {
     free_nn_cuda(&nn);
     free(train_data);
     free(train_labels);
+    free(h_logits);
 
     return 0;
 }
