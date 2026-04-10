@@ -1,6 +1,6 @@
 # MNIST in CUDA
 
-![](assets/mnist-mlp.png)
+
 > Complete implementation progression from PyTorch to optimized CUDA: A step-by-step journey through 8 versions
 
 ## Purpose
@@ -25,7 +25,7 @@ python downloader.py
 ```
 
 ### CUDA Setup
-For CUDA versions (v4-v8), ensure you have NVIDIA CUDA toolkit installed:
+For CUDA versions (v4-v5), ensure you have NVIDIA CUDA toolkit installed:
 ```bash
 # Check CUDA installation
 nvcc --version
@@ -39,14 +39,6 @@ nvcc -arch=native -o v4 v4.cu
 # Compile v5 (cuBLAS optimized)
 nvcc -arch=native -o v5 v5.cu -lcublas
 
-# Compile v6 (fully optimized - streams, TF32, fused kernels)
-nvcc -arch=native -o v6 v6.cu -lcublas
-
-# Compile v7 (custom fused GEMM kernels - educational)
-nvcc -arch=native -o v7 v7.cu -lcublas
-
-# Compile v8 (pure FP16 - fastest)
-nvcc -arch=native -o v8 v8.cu -lcublas
 ```
 
 > **Note**: The `-arch=native` flag ensures kernels are compiled for your specific GPU. Without it, custom CUDA kernels (like those in v4.cu) may produce incorrect results on newer GPUs. If `-arch=native` is not supported by your nvcc version, specify your architecture explicitly (e.g., `-arch=sm_86` for Ampere GPUs).
@@ -95,42 +87,6 @@ nvcc -arch=native -o v8 v8.cu -lcublas
   - Optimized memory access patterns
 - **Purpose**: Production-quality implementation with maximum performance
 
-### v6.cu - Fully Optimized
-- **Framework**: CUDA with cuBLAS + advanced optimizations
-- **Features**:
-  - GPU-side loss computation (eliminates 2 memory transfers per batch)
-  - CUDA Streams for overlapping data transfer with compute
-  - TF32 Tensor Core math on Ampere+ GPUs
-  - Fused kernels (bias + ReLU combined)
-  - Pinned host memory for faster transfers
-  - Double-buffered inputs for pipelining
-- **Purpose**: Maximum performance with all applicable GPU optimizations
-
-### v7.cu - Custom Fused GEMM (Educational)
-- **Framework**: CUDA with custom kernels + cuBLAS hybrid
-- **Features**:
-  - Custom fused GEMM + bias + ReLU kernel (forward pass)
-  - Tiled shared memory GEMM (32x32 tiles)
-  - cuBLAS for backward pass (reliable gradients)
-  - All v6 optimizations (streams, pinned memory, GPU-side loss)
-- **Purpose**: Demonstrates how kernel fusion works at the CUDA level
-- **Note**: Slower than v6 - shows why cuBLAS/CUTLASS exist (writing efficient GEMM is hard)
-
-### v8.cu - Pure FP16 Implementation
-- **Framework**: CUDA with cuBLAS GemmEx + native FP16
-- **Features**:
-  - Pure FP16 throughout: weights, activations, gradients, accumulation
-  - `cublasGemmEx` with `CUBLAS_COMPUTE_16F` for native half-precision math
-  - No FP32 master weights - true 16-bit training
-  - Tensor Core acceleration (FP16 mode)
-  - CUDA Streams for overlapped transfer + compute
-  - Double-buffered inputs for pipelining
-  - Fused bias + ReLU kernels using half intrinsics (`__hadd`, `__hmul`, `__hsub`)
-  - GPU-side softmax/cross-entropy/gradient computation
-  - Pre-converted FP16 training data for minimal transfer overhead
-- **Purpose**: Maximum performance through native half-precision computation
-- **Note**: Same speed as v6 TF32 but half the memory footprint; slight precision loss (final loss 0.145 vs 0.142) acceptable for most applications
-
 ## Usage
 
 ```bash
@@ -140,9 +96,6 @@ python v2.py          # NumPy CPU implementation
 gcc -o v3 v3.c -lm && ./v3                              # C CPU implementation
 nvcc -arch=native -o v4 v4.cu && ./v4                   # Naive CUDA kernels
 nvcc -arch=native -o v5 v5.cu -lcublas && ./v5          # Optimized cuBLAS
-nvcc -arch=native -o v6 v6.cu -lcublas && ./v6          # Fully optimized
-nvcc -arch=native -o v7 v7.cu -lcublas && ./v7          # Custom fused GEMM (educational)
-nvcc -arch=native -o v8 v8.cu -lcublas && ./v8          # Pure FP16
 ```
 
 ## Performance Comparison
@@ -191,24 +144,3 @@ Key observations from the implementation progression:
 - **Memory Patterns**: Coalesced access and persistent allocation strategies
 - **Kernel Launch**: Grid/block dimensions and occupancy considerations
 
-## Advanced Optimizations
-
-Implemented in v6:
-- [CUDA Streams](https://leimao.github.io/blog/CUDA-Stream/): Overlapping computation with data transfer
-- **TF32 Tensor Cores**: Hardware acceleration on Ampere+ GPUs
-- **Kernel Fusion**: Combined bias + ReLU operations
-
-Implemented in v7:
-- **Custom Fused GEMM**: Tiled shared memory GEMM with fused bias + ReLU epilogue
-- Educational demonstration of why optimized libraries (cuBLAS/CUTLASS) are valuable
-
-Implemented in v8:
-- **Pure FP16**: Native half-precision for weights, activations, gradients, and GEMM accumulation
-- **cublasGemmEx**: Flexible GEMM API supporting `CUBLAS_COMPUTE_16F` for true FP16 math
-- **Half Intrinsics**: Direct use of `__hadd`, `__hmul`, `__hsub`, `__hgt` for element-wise ops
-- **Pre-converted Data**: Training data converted to FP16 once at startup, eliminating per-batch conversion
-
-Potential future improvements:
-- [Unified Memory](https://github.com/lintenn/cudaAddVectors-explicit-vs-unified-memory): Simplified memory management
-- **CUDA Graphs**: Capture entire training step to reduce launch overhead
-- **CUTLASS**: Template-based GEMM with true epilogue fusion (requires larger batch sizes)
